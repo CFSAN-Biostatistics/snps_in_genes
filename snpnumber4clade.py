@@ -1,9 +1,10 @@
 #!/usr/bin/env python
-#find SNP shared within a clade
+#find SNP shared within a clade associated with the Agona manuscript comparing outbreaks between 1998 and 2008
+#input is specific to that study and results files
 
 from Bio import SeqIO
 
-inputDir = "/Volumes/gnome-1/gnome3/Papers/AgonaMOM/SmallerDataset/ReferenceBased/snpOut_170621/snpsPerGroups/"
+inputDir = "./"
 textInputFile = open(inputDir + "snpma_preserved_with_reference.fasta","r")
 itemFile = open(inputDir + "2008group.txt","r")
 textOutputFile = open(inputDir + "output_2008group.txt","w")
