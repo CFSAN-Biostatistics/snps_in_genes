@@ -1,21 +1,7 @@
 #!/usr/bin/python
 
-import re, os, time, sys
+import re, os, time, sys, argparse
 
-#path = sys.argv[1]
-multi_vcf = sys.argv[1]
-fasta_file = sys.argv[2]
-
-exceptions = open("exceptions.txt", 'w')
-
-path = ''
-prefix = ''
-for file in sys.argv:
-	if re.search("\.fasta", file):
-		path_file_l = re.split('/', file)
-		file = path_file_l.pop(-1)
-		path = '/'.join(path_file_l)
-		prefix = re.split("\.", file)[0]
 
 '''
 "Prokka is loaded by the shell script so you need to either run this \
@@ -141,7 +127,8 @@ def parse_multi_vcf(multi_multi_vcf):
 #			print chr_pos
 			snp_info[chr_pos] = linel
 	vcf.close()
-	return snp_info, label2index, isolateList[9:]
+	
+	return snp_info, label2index, #isolateList[9:]
 
 def get_locus2snp_pos(locus_tag2pos, locus_tag2dna_seq_id, snp_dict, col_label2index):#, cfsan2bcw):	# isolate, 
 	'''
@@ -179,6 +166,7 @@ def get_isolate_specific_snps(locus2snp_pos, snp_dict, col_label2index, isolate)
 	creates dict with locus_tags as keys and list of snp_positions as values.
 	snp_pos is a list.
 	'''
+	exceptions = open("exceptions.txt", 'w')
 	isolate_specific_snp_pos2nt = {}
 	isolate_specific_locus2snp_pos = {}
 	for locus in sorted(locus2snp_pos.keys()):	# loop thru locus tags
@@ -348,7 +336,7 @@ def consolidate_codons(locus2snp_info, locus2snp_info_all_isolates):
 				locus2snp_info_all_isolates[locus_pos].append(snp_info[1])	#adding additional codon:aa
 	return locus2snp_info_all_isolates
 	
-def print_summary(locus2snp_info_all_isolates, locus_tag2dna_seq_id, locus_tag2gene_pos, locus_tag2orientation, locus_tag2name, path):
+def print_summary(locus2snp_info_all_isolates, locus_tag2dna_seq_id, locus_tag2gene_pos, locus_tag2orientation, locus_tag2name, path, fasta_file):
 	'''
 	Prints summary of variant information for all isolates without regard to isolate.
 	'''
@@ -363,43 +351,93 @@ def print_summary(locus2snp_info_all_isolates, locus_tag2dna_seq_id, locus_tag2g
 		to_print = "\t".join([locus, locus_tag2dna_seq_id[locus], locus_tag2gene_pos[locus][0], locus_tag2gene_pos[locus][1], pos, ','.join(locus2snp_info_all_isolates[locus_pos]), locus_tag2orientation[locus], locus_tag2name[locus]])
 		out.write(to_print+"\n")
 
-# ONLY DO ONCE.
-print_time()
-length = test_defline_len(fasta_file)
-if length > 20:	# deciding whether to shorted deflines for PROKKA.
-	defline2short, fasta_file = shorten_deflines(fasta_file)
-	multi_vcf = shorten_vcf_seq_ids(multi_vcf, defline2short)
+	# ONLY DO ONCE.
+	print_time()
+	length = test_defline_len(fasta_file)
+	if length > 20:	# deciding whether to shorted deflines for PROKKA.
+		defline2short, fasta_file = shorten_deflines(fasta_file)
+		multi_vcf = shorten_vcf_seq_ids(multi_vcf, defline2short)
 
-prokka_out = path+'/prokka_output'
-if not os.path.exists(prokka_out):
-	os.system('mkdir '+prokka_out)
-	os.system('cp '+fasta_file+' '+prokka_out)
+	prokka_out = path+'/prokka_output'
+	if not os.path.exists(prokka_out):
+		os.system('mkdir '+prokka_out)
+		os.system('cp '+fasta_file+' '+prokka_out)
 
-ffn_file = prokka_out+"/"+prefix+".ffn"
-gff_file = prokka_out+"/"+prefix+".gff"
+	ffn_file = prokka_out+"/"+prefix+".ffn"
+	gff_file = prokka_out+"/"+prefix+".gff"
 
-os.system('prokka --outdir '+prokka_out+' --force -norrna -notrna --prefix '+prefix+' '+fasta_file)
-snp_dict, col_label2index, isolate_list = parse_multi_vcf(multi_vcf)
-locus_tag2gene_pos, locus_tag2name, locus_tag2orientation, locus_tag2dna_seq_id = gff2gene_pos(gff_file)
-locus2orfs = orfs2dict(ffn_file)
-locus2snp_pos = get_locus2snp_pos(locus_tag2gene_pos, locus_tag2dna_seq_id, snp_dict, col_label2index)
-print_time()
+	os.system('prokka --outdir '+prokka_out+' --force -norrna -notrna --prefix '+prefix+' '+fasta_file)
+	snp_dict, col_label2index, isolate_list = parse_multi_vcf(multi_vcf)
+	locus_tag2gene_pos, locus_tag2name, locus_tag2orientation, locus_tag2dna_seq_id = gff2gene_pos(gff_file)
+	locus2orfs = orfs2dict(ffn_file)
+	locus2snp_pos = get_locus2snp_pos(locus_tag2gene_pos, locus_tag2dna_seq_id, snp_dict, col_label2index)
+	print_time()
 
-results = path+'/gene_snp_results'
-if not os.path.exists(results):
-	os.system('mkdir '+results)
+	results = path+'/gene_snp_results'
+	if not os.path.exists(results):
+		os.system('mkdir '+results)
 
-# DO FOR EVERY STRAIN.
-locus2snp_info_all_isolates = {}
-for isolate in isolate_list:
-	print isolate
-	isolate_specific_snp_pos2nt, isolate_specific_locus2snp_pos = get_isolate_specific_snps(locus2snp_pos, snp_dict, col_label2index, isolate)
-	locus2seqs, locus2indel_pos = find_alternate_seqs(isolate_specific_locus2snp_pos, locus_tag2gene_pos, locus2orfs, locus_tag2orientation, isolate_specific_snp_pos2nt)
-	locus2snp_info = test_dN_dS(locus2seqs)
-	locus2snp_info_all_isolates = consolidate_codons(locus2snp_info, locus2snp_info_all_isolates)
-	print_one_isolate(locus2snp_info, locus_tag2dna_seq_id, locus_tag2gene_pos, locus_tag2orientation, locus_tag2name, isolate, path)
-	print print_time()
+	# DO FOR EVERY STRAIN.
+	locus2snp_info_all_isolates = {}
+	for isolate in isolate_list:
+		print isolate
+		isolate_specific_snp_pos2nt, isolate_specific_locus2snp_pos = get_isolate_specific_snps(locus2snp_pos, snp_dict, col_label2index, isolate)
+		locus2seqs, locus2indel_pos = find_alternate_seqs(isolate_specific_locus2snp_pos, locus_tag2gene_pos, locus2orfs, locus_tag2orientation, isolate_specific_snp_pos2nt)
+		locus2snp_info = test_dN_dS(locus2seqs)
+		locus2snp_info_all_isolates = consolidate_codons(locus2snp_info, locus2snp_info_all_isolates)
+		print_one_isolate(locus2snp_info, locus_tag2dna_seq_id, locus_tag2gene_pos, locus_tag2orientation, locus_tag2name, isolate, path)
+		print print_time()
 
-print_summary(locus2snp_info_all_isolates, locus_tag2dna_seq_id, locus_tag2gene_pos, locus_tag2orientation, locus_tag2name, path)
+	print_summary(locus2snp_info_all_isolates, locus_tag2dna_seq_id, locus_tag2gene_pos, locus_tag2orientation, locus_tag2name, path)
 
-print_time()
+	print_time()
+
+def parse_arguments(system_args):
+	""" 
+	Parse command line arguments
+	"""
+	usage = """Takes a multi-vcf file and a reference and finds the genes that SNPs reside.  
+	
+	Example usage:
+	build_allele_file_per_locus.py -i ref_deflines.txt -r ref_seq_ids.txt"""
+
+	parser = argparse.ArgumentParser(description = usage, formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+
+	parser.add_argument("-v", "--vcf-file", metavar="FILE", dest="multi_vcf", default=None, required=True, help="Specify a multi vcf file generated by the CFSAN SNP Pipeline.")
+ 	parser.add_argument("-f", "--ref-file", metavar="FILE", dest="fasta_file", default=None, required=True, help="Specify a reference in fasta format.")
+
+	args = parser.parse_args(system_args)
+	return args	
+
+def main(args):
+	# All args
+	multi_vcf = args.multi_vcf
+	fasta_file = args.fasta_file
+
+	path = ''
+	prefix = ''
+	for file in sys.argv:
+		if re.search("\.fasta", file):
+			path_file_l = re.split('/', file)
+			file = path_file_l.pop(-1)
+			path = '/'.join(path_file_l)
+			prefix = re.split("\.", file)[0]
+
+	print_time()
+	length = test_defline_len(fasta_file) 
+	defline2short_defline, new_fasta_file = shorten_deflines(fasta_file) 
+	new_vcf_file = shorten_vcf_seq_ids(vcf_file, defline2short_defline) 
+	id2start_end, id2description, id2orientation, locus2dna_seg = gff2gene_pos(gff_file) 
+	snp_info, label2index = parse_multi_vcf(multi_multi_vcf) 
+	locus2snp_pos = get_locus2snp_pos(locus_tag2pos, locus_tag2dna_seq_id, snp_dict, col_label2index) 
+	isolate_specific_snp_pos2nt, isolate_specific_locus2snp_pos = get_isolate_specific_snps(locus2snp_pos, snp_dict, col_label2index, isolate) 
+	def2seq = orfs2dict(fasta) 
+	locus2seqs, locusTag2indelPos = find_alternate_seqs(locusTag2snpPos, locusTag2genePos, locusTags2orfs, locusTag2orientations, snpPos2ntState) 
+	locus_snp_info = test_dN_dS(locusTag2seqs) 
+	print_one_isolate(locus2snp_info, locus_tag2dna_seq_id, locus_tag2gene_pos, locus_tag2orientation, locus_tag2name, isolate, path) 
+	locus2snp_info_all_isolates = consolidate_codons(locus2snp_info, locus2snp_info_all_isolates) 
+	print_summary(locus2snp_info_all_isolates, locus_tag2dna_seq_id, locus_tag2gene_pos, locus_tag2orientation, locus_tag2name, path) 
+
+if __name__ == '__main__':
+	args = parse_arguments(sys.argv[1:])
+	main(args)
